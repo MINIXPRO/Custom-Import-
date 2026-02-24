@@ -38,6 +38,7 @@
   "mode_of_shipment",
   "port_of_loading_pol",
   "port_of_destination_pod",
+  "gross__weight",
   "column_break_ccne",
   "country_origin",
   "pol_code",
@@ -148,7 +149,7 @@
    "fieldname": "naming_series",
    "fieldtype": "Select",
    "label": "Series",
-   "options": "PR-.###"
+   "options": "PCK-.###"
   },
   {
    "fieldname": "supplier_address_display",
@@ -414,6 +415,12 @@
    "label": "Rounding Adjustment",
    "options": "currency",
    "read_only": 1
+  },
+  {
+   "description": "LBS",
+   "fieldname": "gross__weight",
+   "fieldtype": "Float",
+   "label": "Gross  Weight"
   }
  ],
  "grid_page_length": 50,
@@ -429,7 +436,7 @@
    "link_fieldname": "custom_pickup_request"
   }
  ],
- "modified": "2025-12-04 11:33:50.745816",
+ "modified": "2026-02-24 14:18:42.605937",
  "modified_by": "Administrator",
  "module": "Import",
  "name": "Pickup Request",

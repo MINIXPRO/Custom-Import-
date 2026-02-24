@@ -1081,6 +1081,20 @@ frappe.ui.form.on('Pickup Request', {
 
     po_no_remove(frm) {
         set_po_totals_if_condition(frm);
+    },
+    gross_weight: function(frm) {
+        if (frm.doc.gross_weight) {
+            frm.set_value('gross__weight', frm.doc.gross_weight * 2.20462);
+        } else {
+            frm.set_value('gross__weight', 0);
+        }
+    },
+    gross__weight: function(frm) {
+        if (frm.doc.gross__weight) {
+            frm.set_value('gross_weight', frm.doc.gross__weight / 2.20462);
+        } else {
+            frm.set_value('gross_weight', 0);
+        }
     }
 });
 
@@ -1211,3 +1225,4 @@ function remove_zero_pick_qty_rows(frm) {
 
 //     }
 // }
+
