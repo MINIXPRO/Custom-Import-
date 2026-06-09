@@ -117,6 +117,7 @@ function prepare_pickup_request_data(frm) {
                 rate: item.rate,
                 amount: item.amount,
                 amount_in_inr: item.base_amount,
+                custom_oligo_bank_ref:item.custom_oligo_bank_ref,
             });
         }
     });

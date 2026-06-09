@@ -17,7 +17,8 @@
   "material_desc",
   "po_number",
   "rate",
-  "amount"
+  "amount",
+  "custom_oligo_bank_ref"
  ],
  "fields": [
   {
@@ -88,13 +89,18 @@
    "fieldtype": "Currency",
    "label": "Amount",
    "options": "currency"
+  },
+  {
+   "fieldname": "custom_oligo_bank_ref",
+   "fieldtype": "Data",
+   "label": "Oligo Bank Ref"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2025-09-18 12:21:33.033783",
- "modified_by": "pragati@gmail.com",
+ "modified": "2026-06-09 10:15:35.505388",
+ "modified_by": "Administrator",
  "module": "Import",
  "name": "Purchase Order Details",
  "owner": "pragati@gmail.com",

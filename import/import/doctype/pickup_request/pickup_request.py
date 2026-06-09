@@ -103,44 +103,51 @@ class PickupRequest(Document):
             if not self.get("conversion_rate"):
                 self.conversion_rate = 1.0
 
+    def calculate_totals(self):
+        self.total_amount = 0
+        self.total_quantity = 0
+        self.total_picked_quantity = 0
+
+        if self.get("purchase_order_details"):
+            for item in self.purchase_order_details:
+                pick_qty = flt(item.get("pick_qty", 0), 2)
+                rate = flt(item.get("rate", 0), 2)
+                currency_rate = flt(item.get("currency_rate", 1), 2) or 1.0
+
+                # Always recalculate from pick_qty × rate × currency_rate
+                amount = flt(pick_qty * rate, 2)
+                amount_in_inr = flt(amount * currency_rate, 2)
+
+                item.amount = amount
+                item.amount_in_inr = amount_in_inr
+
+                self.total_amount += amount_in_inr
+                self.total_quantity += flt(item.get("quantity", 0), 2)
+                self.total_picked_quantity += pick_qty
+
+        self.total_amount = flt(self.total_amount, 2)
+        self.base_net_total = self.total_amount
+        self.net_total = flt(self.total_amount / (flt(self.get('conversion_rate', 1), 2) or 1.0), 2)
 
     # def calculate_totals(self):
-    #     """Calculate basic totals from items"""
     #     self.total_amount = 0
     #     self.total_quantity = 0
     #     self.total_picked_quantity = 0
         
     #     if self.get("purchase_order_details"):
     #         for item in self.purchase_order_details:
-    #             amount = flt(item.get("amount_in_inr", 0)) or flt(item.get("amount", 0))
+    #             # ✅ FIX: Use consistent precision (2 decimal places)
+    #             amount = flt(item.get("amount_in_inr", 0), 2) or flt(item.get("amount", 0), 2)
     #             self.total_amount += amount
-    #             self.total_quantity += flt(item.get("quantity", 0))
-    #             self.total_picked_quantity += flt(item.get("pick_qty", 0))
+    #             self.total_quantity += flt(item.get("quantity", 0), 2)
+    #             self.total_picked_quantity += flt(item.get("pick_qty", 0), 2)
+        
+    #     # ✅ FIX: Round total_amount to 2 decimals consistently
+    #     self.total_amount = flt(self.total_amount, 2)
         
     #     # Set net totals for tax calculations
     #     self.base_net_total = self.total_amount
-    #     self.net_total = self.total_amount / flt(self.get('conversion_rate', 1), 1)
-
-
-    def calculate_totals(self):
-        self.total_amount = 0
-        self.total_quantity = 0
-        self.total_picked_quantity = 0
-        
-        if self.get("purchase_order_details"):
-            for item in self.purchase_order_details:
-                # ✅ FIX: Use consistent precision (2 decimal places)
-                amount = flt(item.get("amount_in_inr", 0), 2) or flt(item.get("amount", 0), 2)
-                self.total_amount += amount
-                self.total_quantity += flt(item.get("quantity", 0), 2)
-                self.total_picked_quantity += flt(item.get("pick_qty", 0), 2)
-        
-        # ✅ FIX: Round total_amount to 2 decimals consistently
-        self.total_amount = flt(self.total_amount, 2)
-        
-        # Set net totals for tax calculations
-        self.base_net_total = self.total_amount
-        self.net_total = flt(self.total_amount / flt(self.get('conversion_rate', 1), 2), 2)
+    #     self.net_total = flt(self.total_amount / flt(self.get('conversion_rate', 1), 2), 2)
 
     def set_grand_total(self):
         """Set grand total fields"""
@@ -620,12 +627,83 @@ def update_po_pick_qty_and_status(pickup_request_name):
 
     frappe.db.commit()
 
+# @frappe.whitelist()
+# def trigger_pickup_updates(pickup_request):
+#     update_po_pick_qty_and_status(pickup_request)
+#     doc = frappe.get_doc("Pickup Request", pickup_request)
+#     doc.db_set("po_updated", 1)
 @frappe.whitelist()
 def trigger_pickup_updates(pickup_request):
-    update_po_pick_qty_and_status(pickup_request)
-    doc = frappe.get_doc("Pickup Request", pickup_request)
-    doc.db_set("po_updated", 1)
+    pr_doc = frappe.get_doc("Pickup Request", pickup_request)
 
+    # Step 1: Collect all updates grouped by PO to avoid multiple saves
+    po_updates = {}  # po_name -> po_doc
+
+    for pr_item in pr_doc.purchase_order_details:
+        if not pr_item.pick_qty or pr_item.pick_qty <= 0:
+            continue
+
+        po_name = pr_item.po_number
+        oligo_ref = pr_item.get("custom_oligo_bank_ref")
+
+        if not po_name:
+            continue
+
+        # Load PO doc only once per PO
+        if po_name not in po_updates:
+            po_updates[po_name] = frappe.get_doc("Purchase Order", po_name)
+
+        po_doc = po_updates[po_name]
+        matched = False
+
+        if oligo_ref:
+            for po_item in po_doc.items:
+                if po_item.get("custom_oligo_bank_ref") == oligo_ref:
+                    po_item.custom_pick_qty = (po_item.custom_pick_qty or 0) + pr_item.pick_qty
+                    matched = True
+                    break
+
+        if not matched:
+            for po_item in po_doc.items:
+                if po_item.item_code == pr_item.item:
+                    po_item.custom_pick_qty = (po_item.custom_pick_qty or 0) + pr_item.pick_qty
+                    break
+
+        # Add pickup request reference if not already present
+        existing_refs = [r.pickup_request for r in po_doc.get("custom_pickup_request", [])]
+        if pickup_request not in existing_refs:
+            po_doc.append("custom_pickup_request", {"pickup_request": pickup_request})
+
+    # Save each PO once after all items are updated
+    for po_name, po_doc in po_updates.items():
+        po_doc.save(ignore_permissions=True)
+
+    # Step 2: Update pickup status on each linked PO
+    for po_row in pr_doc.po_no:
+        po_name = po_row.purchase_order
+        po_doc = frappe.get_doc("Purchase Order", po_name)  # fresh fetch after save
+
+        all_fully_picked = True
+        any_partially_picked = False
+
+        for po_item in po_doc.items:
+            pick_qty = po_item.custom_pick_qty or 0
+            if pick_qty < po_item.qty:
+                all_fully_picked = False
+                if pick_qty > 0:
+                    any_partially_picked = True
+
+        if all_fully_picked:
+            po_doc.custom_pickup_status = "Fully Picked"
+        elif any_partially_picked:
+            po_doc.custom_pickup_status = "Partially Picked"
+        else:
+            po_doc.custom_pickup_status = "Pending"
+
+        po_doc.save(ignore_permissions=True)
+
+    frappe.db.commit()
+    
 def get_dashboard_data(data):
     # Links for Pickup Request
     data["non_standard_fieldnames"]["Request for Quotation"] = "pickup_request"
