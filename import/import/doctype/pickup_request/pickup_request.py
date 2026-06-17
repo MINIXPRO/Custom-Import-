@@ -882,3 +882,70 @@ def send_email_on_workflow_action(doc, method):
     Can be called from Workflow Action in the workflow definition
     """
     send_email_to_exim_user(doc)
+
+
+
+@frappe.whitelist()
+def make_purchase_receipt_from_pickup(pickup_request):
+    pck = frappe.get_doc("Pickup Request", pickup_request)
+
+    # Build pick qty maps
+    oligo_pick_map = {}   # custom_oligo_bank_ref -> pick_qty
+    plain_pick_map = {}   # (po_number, item_code) -> pick_qty
+
+    for d in pck.purchase_order_details:
+        if d.get("custom_oligo_bank_ref"):
+            oligo_pick_map[d.custom_oligo_bank_ref] = d.pick_qty or 0
+        else:
+            key = (d.po_number, d.item)
+            plain_pick_map[key] = d.pick_qty or 0
+
+    po_names = [row.purchase_order for row in pck.po_no]
+    if not po_names:
+        frappe.throw("No Purchase Orders linked to this Pickup Request")
+
+    from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
+
+    created_prs = []
+
+    for po_name in po_names:
+        pr = make_purchase_receipt(po_name)
+
+        po = frappe.get_doc("Purchase Order", po_name)
+        po_item_map = {item.name: item for item in po.items}
+
+        final_items = []
+        for item in pr.items:
+            poi = po_item_map.get(item.purchase_order_item)
+            if not poi:
+                continue
+
+            oligo_ref = poi.get("custom_oligo_bank_ref")
+            if oligo_ref and oligo_ref in oligo_pick_map:
+                pick_qty = oligo_pick_map[oligo_ref]
+            else:
+                pick_qty = plain_pick_map.get((po_name, poi.item_code), 0)
+
+            if pick_qty <= 0:
+                continue
+
+            item.qty = pick_qty
+            item.received_qty = pick_qty
+            item.stock_qty = pick_qty
+            item.received_stock_qty = pick_qty
+            item.amount = pick_qty * (item.rate or 0)
+            item.base_amount = pick_qty * (item.base_rate or item.rate or 0)
+            item.net_amount = item.amount
+            item.base_net_amount = item.base_amount
+            item.custom_pickup_request = pickup_request
+            final_items.append(item)
+
+        if not final_items:
+            continue  # this PO has no pickup items — skip entirely
+
+        pr.items = final_items
+        pr.insert(ignore_permissions=True)
+        frappe.db.commit()
+        created_prs.append({"name": pr.name, "supplier": pr.supplier})
+
+    return created_prs

@@ -4,6 +4,56 @@
 frappe.ui.form.on('Pickup Request', {
 
     refresh: function(frm) {
+        // ── Purchase Receipt button ──
+if (frm.doc.docstatus === 1) {
+    frm.add_custom_button(__('Purchase Receipt'), function () {
+        if (!frm.doc.po_no || frm.doc.po_no.length === 0) {
+            frappe.msgprint({
+                title: __('No Purchase Orders'),
+                indicator: 'red',
+                message: __('Please add at least one Purchase Order before creating a Purchase Receipt.')
+            });
+            return;
+        }
+
+        frappe.call({
+            method: 'import.import.doctype.pickup_request.pickup_request.make_purchase_receipt_from_pickup',
+            args: { pickup_request: frm.doc.name },
+            freeze: true,
+            freeze_message: __('Creating Purchase Receipt(s)...'),
+            callback: function (r) {
+                if (!r.message || r.message.length === 0) {
+                    frappe.msgprint({
+                        title: __('No Receipts Created'),
+                        indicator: 'orange',
+                        message: __('No items with valid pick quantities were found.')
+                    });
+                    return;
+                }
+
+                let pr_list = r.message;
+
+                if (pr_list.length === 1) {
+                    frappe.set_route('Form', 'Purchase Receipt', pr_list[0].name);
+                } else {
+                    let links = pr_list.map(function (pr) {
+                        let url = `/app/purchase-receipt/${pr.name}`;
+                        return `<a href="${url}" target="_blank">${pr.name} (${pr.supplier})</a>`;
+                    });
+
+                    frappe.msgprint({
+                        title: __('Purchase Receipts Created'),
+                        indicator: 'green',
+                        message: __(
+                            'The following Purchase Receipts were created as drafts, one per Purchase Order:<br><br>' +
+                            links.join('<br>')
+                        )
+                    });
+                }
+            }
+        });
+    }, __('Create'));
+}
 
         // ── Payment Requisition button ──
         if (frm.doc.docstatus === 1) {
