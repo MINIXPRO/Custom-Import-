@@ -42,7 +42,6 @@
   "assessable_value",
   "deferred_duty_amt",
   "cargo_type",
-  "boe_no",
   "boe_details",
   "boe_number",
   "boe_date",
@@ -66,7 +65,8 @@
   "penalty_amount",
   "tot_al",
   "section_break_ynwx",
-  "approvalrejection_remark"
+  "approvalrejection_remark",
+  "custom_boe_no_details"
  ],
  "fields": [
   {
@@ -412,8 +412,7 @@
    "fieldname": "boe_details",
    "fieldtype": "Link",
    "label": "BOE Details",
-   "options": "BOE",
-   "read_only": 1
+   "options": "BOE"
   }
  ],
  "grid_page_length": 50,
@@ -425,7 +424,7 @@
    "link_fieldname": "custom_payment_requisition"
   }
  ],
- "modified": "2026-04-28 12:50:15.159458",
+ "modified": "2026-06-18 15:05:46.384408",
  "modified_by": "Administrator",
  "module": "Import",
  "name": "Payment Requisition",

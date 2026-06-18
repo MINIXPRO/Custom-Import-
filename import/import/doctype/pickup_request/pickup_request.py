@@ -58,6 +58,12 @@ class PickupRequest(Document):
         
     def before_save(self):
         self.calculate_taxes_and_totals()
+
+        
+    def before_submit(self):
+        if not self.fop and (not self.get("po_no") or len(self.po_no) == 0):
+            frappe.throw(_("Please add at least one Purchase Order before submitting, or check the FOP field."))
+
     
 
 
@@ -128,26 +134,6 @@ class PickupRequest(Document):
         self.total_amount = flt(self.total_amount, 2)
         self.base_net_total = self.total_amount
         self.net_total = flt(self.total_amount / (flt(self.get('conversion_rate', 1), 2) or 1.0), 2)
-
-    # def calculate_totals(self):
-    #     self.total_amount = 0
-    #     self.total_quantity = 0
-    #     self.total_picked_quantity = 0
-        
-    #     if self.get("purchase_order_details"):
-    #         for item in self.purchase_order_details:
-    #             # ✅ FIX: Use consistent precision (2 decimal places)
-    #             amount = flt(item.get("amount_in_inr", 0), 2) or flt(item.get("amount", 0), 2)
-    #             self.total_amount += amount
-    #             self.total_quantity += flt(item.get("quantity", 0), 2)
-    #             self.total_picked_quantity += flt(item.get("pick_qty", 0), 2)
-        
-    #     # ✅ FIX: Round total_amount to 2 decimals consistently
-    #     self.total_amount = flt(self.total_amount, 2)
-        
-    #     # Set net totals for tax calculations
-    #     self.base_net_total = self.total_amount
-    #     self.net_total = flt(self.total_amount / flt(self.get('conversion_rate', 1), 2), 2)
 
     def set_grand_total(self):
         """Set grand total fields"""
@@ -468,7 +454,13 @@ def get_suppliers_dialog_data(pickup_request):
 
 
 @frappe.whitelist()
-def create_rfq_from_pickup_request(pickup_request, suppliers, email_template, schedule_date=None):
+# def create_rfq_from_pickup_request(pickup_request, suppliers, email_template, schedule_date=None):
+def create_rfq_from_pickup_request(
+    pickup_request,
+    suppliers,
+    email_template,
+    schedule_date=None,
+    warehouse=None):
     if not suppliers:
         frappe.throw("Please add at least one supplier.")
     
@@ -512,12 +504,21 @@ def create_rfq_from_pickup_request(pickup_request, suppliers, email_template, sc
     # Add Items (warehouse fetched from PO in child table)
     # --------------------------------------------------------------------------
     for item in pickup.purchase_order_details:
+        if pickup.fop:
+            po_warehouse = warehouse
+        else:
+            po_number = item.po_number
+            po_warehouse = frappe.db.get_value(
+                "Purchase Order",
+                po_number,
+                "set_warehouse"
+            )
 
-        # 1. Get PO number from child table
-        po_number = item.po_number
+        # # 1. Get PO number from child table
+        # po_number = item.po_number
 
-        # 2. Fetch warehouse from PO's set_warehouse field
-        po_warehouse = frappe.db.get_value("Purchase Order", po_number, "set_warehouse")
+        # # 2. Fetch warehouse from PO's set_warehouse field
+        # po_warehouse = frappe.db.get_value("Purchase Order", po_number, "set_warehouse")
 
         # 3. Load Item Doc to read stock UOM & uoms
         item_doc = frappe.get_doc("Item", item.item)
@@ -629,16 +630,17 @@ def update_po_pick_qty_and_status(pickup_request_name):
 
 # @frappe.whitelist()
 # def trigger_pickup_updates(pickup_request):
-#     update_po_pick_qty_and_status(pickup_request)
-#     doc = frappe.get_doc("Pickup Request", pickup_request)
-#     doc.db_set("po_updated", 1)
+#     pr_doc = frappe.get_doc("Pickup Request", pickup_request)
+#     po_updates = {} 
+
 @frappe.whitelist()
 def trigger_pickup_updates(pickup_request):
     pr_doc = frappe.get_doc("Pickup Request", pickup_request)
 
-    # Step 1: Collect all updates grouped by PO to avoid multiple saves
-    po_updates = {}  # po_name -> po_doc
+    if not pr_doc.po_no:
+        return  
 
+    po_updates = {}
     for pr_item in pr_doc.purchase_order_details:
         if not pr_item.pick_qty or pr_item.pick_qty <= 0:
             continue
@@ -734,18 +736,24 @@ def get_dashboard_link_data(doctype, name, data=None):
         }
     return {}
 
+# @frappe.whitelist()
+# def should_show_update_button(pickup_request):
+#     pickup = frappe.get_doc("Pickup Request", pickup_request)
+#     po_names = list(set([row.po_number for row in pickup.purchase_order_details if row.po_number]))
+
 @frappe.whitelist()
 def should_show_update_button(pickup_request):
     pickup = frappe.get_doc("Pickup Request", pickup_request)
+    if not pickup.po_no:
+        return False
     po_names = list(set([row.po_number for row in pickup.purchase_order_details if row.po_number]))
-
     for po_name in po_names:
         po = frappe.get_doc("Purchase Order", po_name)
         for item in po.items:
             custom_pick_qty = item.custom_pick_qty or 0
             if custom_pick_qty < item.qty:
-                return True  # At least one item still pending
-    return False  # All fully picked
+                return True 
+    return False  
 
 
 
@@ -900,8 +908,14 @@ def make_purchase_receipt_from_pickup(pickup_request):
             key = (d.po_number, d.item)
             plain_pick_map[key] = d.pick_qty or 0
 
+    # po_names = [row.purchase_order for row in pck.po_no]
+    # if not po_names:
+    #     frappe.throw("No Purchase Orders linked to this Pickup Request")
     po_names = [row.purchase_order for row in pck.po_no]
     if not po_names:
+        if pck.fop:
+            frappe.msgprint(_("FOP is enabled with no linked Purchase Orders — no Purchase Receipt created."), indicator="blue")
+            return []
         frappe.throw("No Purchase Orders linked to this Pickup Request")
 
     from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt

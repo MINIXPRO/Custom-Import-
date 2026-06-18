@@ -8,6 +8,7 @@
  "field_order": [
   "section_break_xbiq",
   "amended_from",
+  "fop",
   "name_of_supplier",
   "supplier_address",
   "naming_series",
@@ -421,6 +422,12 @@
    "fieldname": "gross__weight",
    "fieldtype": "Float",
    "label": "Gross  Weight"
+  },
+  {
+   "default": "0",
+   "fieldname": "fop",
+   "fieldtype": "Check",
+   "label": "FOP"
   }
  ],
  "grid_page_length": 50,
@@ -436,7 +443,7 @@
    "link_fieldname": "custom_pickup_request"
   }
  ],
- "modified": "2026-02-24 14:18:42.605937",
+ "modified": "2026-06-18 10:54:15.369552",
  "modified_by": "Administrator",
  "module": "Import",
  "name": "Pickup Request",

@@ -2,19 +2,17 @@
 // For license information, please see license.txt
 
 frappe.ui.form.on('Pickup Request', {
-
-    refresh: function(frm) {
-        // ── Purchase Receipt button ──
+refresh: function(frm) {
 if (frm.doc.docstatus === 1) {
-    frm.add_custom_button(__('Purchase Receipt'), function () {
-        if (!frm.doc.po_no || frm.doc.po_no.length === 0) {
-            frappe.msgprint({
-                title: __('No Purchase Orders'),
-                indicator: 'red',
-                message: __('Please add at least one Purchase Order before creating a Purchase Receipt.')
-            });
-            return;
-        }
+        frm.add_custom_button(__('Purchase Receipt'), function () {
+            if (!frm.doc.fop && (!frm.doc.po_no || frm.doc.po_no.length === 0)) {
+                frappe.msgprint({
+                    title: __('No Purchase Orders'),
+                    indicator: 'red',
+                    message: __('Please add at least one Purchase Order before creating a Purchase Receipt.')
+                });
+                return;
+            }
 
         frappe.call({
             method: 'import.import.doctype.pickup_request.pickup_request.make_purchase_receipt_from_pickup',
@@ -425,20 +423,24 @@ if (frm.doc.docstatus === 1) {
         calculate_taxes_and_totals(frm);
     },
 
+
     validate: function (frm) {
-        // Remove zero pick_qty rows
         remove_zero_pick_qty_rows(frm);
 
-        // Validate pick qty against PO qty
+        // Skip PO qty validation entirely when FOP is checked
+        if (frm.doc.fop) return;
+
         let validation_failed = false;
         let promises = [];
 
         $.each(frm.doc.purchase_order_details || [], function (i, d) {
-            promises.push(
-                frappe.call({
-                    method: "import.import.doctype.pickup_request.pickup_request.validate_po_order_qty_to_pickup_qty",
-                    args: { po_no: d.po_number, item_code: d.item }
-                }).then(r => {
+            if (!d.po_number) return;
+
+        promises.push(
+            frappe.call({
+                method: "import.import.doctype.pickup_request.pickup_request.validate_po_order_qty_to_pickup_qty",
+                args: { po_no: d.po_number, item_code: d.item }
+            }).then(r => {
                     if (r.message) {
                         let qty = r.message[0]['qty'];
                         let received_qty = r.message[0]['received_qty'];
@@ -787,20 +789,50 @@ function remove_zero_pick_qty_rows(frm) {
 function show_supplier_popup(frm) {
     const d = new frappe.ui.Dialog({
         title: 'Create RFQ - Add Suppliers',
+
+        fields: [
+    {
+        label: 'Suppliers',
+        fieldname: 'supplier_table',
+        fieldtype: 'Table',
+        reqd: 1,
+        options: 'Supplier Child Table',
         fields: [
             {
-                label: 'Suppliers',
-                fieldname: 'supplier_table',
-                fieldtype: 'Table',
+                fieldname: 'supplier',
+                fieldtype: 'Link',
+                options: 'Supplier',
+                label: 'Supplier',
                 reqd: 1,
-                options: 'Supplier Child Table',
-                fields: [
-                    { fieldname: 'supplier', fieldtype: 'Link', options: 'Supplier', label: 'Supplier', reqd: 1, in_list_view: 1 },
-                    { fieldname: 'required_by', fieldtype: 'Date', label: 'Required By', reqd: 1, in_list_view: 1 }
-                ]
+                in_list_view: 1
             },
-            { fieldname: 'email_template', fieldtype: 'Link', options: 'Email Template', label: 'Email Template', reqd: 1 }
-        ],
+            {
+                fieldname: 'required_by',
+                fieldtype: 'Date',
+                label: 'Required By',
+                reqd: 1,
+                in_list_view: 1
+            }
+        ]
+    },
+
+    {
+        fieldname: "warehouse",
+        label: "Warehouse",
+        fieldtype: "Link",
+        options: "Warehouse",
+        reqd: frm.doc.fop ? 1 : 0,
+        hidden: !frm.doc.fop
+    },
+
+    {
+        fieldname: 'email_template',
+        fieldtype: 'Link',
+        options: 'Email Template',
+        label: 'Email Template',
+        reqd: 1
+    }
+],
         primary_action_label: 'Submit',
         primary_action: function(values) {
             if (!values.supplier_table || values.supplier_table.length === 0) {
@@ -827,7 +859,9 @@ function show_supplier_popup(frm) {
                         pickup_request: frm.doc.name,
                         suppliers: values.supplier_table,
                         email_template: values.email_template,
-                        schedule_date: schedule_date
+                        schedule_date: schedule_date,
+                        warehouse: values.warehouse
+
                     },
                     callback: function(r) {
                         d.enable_primary_action();
