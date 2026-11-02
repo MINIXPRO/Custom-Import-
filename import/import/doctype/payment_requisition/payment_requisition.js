@@ -1,80 +1,204 @@
 frappe.ui.form.on('Payment Requisition', {
+    // refresh: function(frm) {
+    //     // Always show button on draft — allows adding more pickup requests
+    //     if (frm.doc.docstatus === 0) {
+    //         frm.add_custom_button(__('Get Pickup Request'), function() {
+    //             show_pickup_request_dialog(frm);
+    //         }).addClass('btn-primary');
+    //     }
+
+    //     if (
+    //         frm.doc.workflow_state == "Create Bill Of Entry" &&
+    //         frm.doc.docstatus == 0 &&
+    //         frm.doc.bill_of_entry_created !== 1
+    //     ) {
+    //         frm.add_custom_button(__('Bill Of Entry'), () => {
+    //             frappe.call({
+    //                 method: "import.import.doctype.boe.boe.create_boe",
+    //                 args: { payment_requisition: frm.doc.name },
+    //                 callback: function(r) {
+    //                     if (!r.exc) {
+    //                         frappe.set_route('Form', 'BOE', r.message);
+    //                     }
+    //                 }
+    //             });
+    //         }, __('Create'));
+    //     }
+
+    //     if (frm.doc.duty_amount) {
+    //         frappe.call({
+    //             method: "import.import.doctype.payment_requisition.payment_requisition.get_amount_in_words",
+    //             args: { amount: frm.doc.duty_amount },
+    //             callback: function(r) {
+    //                 if (r.message) {
+    //                     frm.set_value("duty_amount_in_word", r.message);
+    //                 }
+    //             }
+    //         });
+    //     } else {
+    //         frm.set_value("duty_amount_in_word", "");
+    //     }
+
+    //     if (!frm.is_new()) {
+    //         frm.add_custom_button(
+    //             __("Send Payment Form"),
+    //             function () {
+    //                 const supplierId = (frm.doc.supplier_name && frm.doc.supplier_name.length)
+    //                     ? frm.doc.supplier_name[0].supplier
+    //                     : null;
+
+    //                 frappe.confirm(
+    //                     `Send Vendor Payment Form link to <b>${supplierId || "supplier"}</b>?`,
+    //                     function () {
+    //                         frappe.call({
+    //                             method: "import.import.doctype.payment_requisition.payment_requisition.send_payment_requisition_vendor_mail",
+    //                             args: {
+    //                                 payment_requisition_name: frm.doc.name
+    //                             },
+    //                             freeze: true,
+    //                             freeze_message: __("Sending email to vendor..."),
+    //                             callback: function (r) {
+    //                                 if (!r.exc) {
+    //                                     frappe.msgprint({
+    //                                         title: __("Email Sent"),
+    //                                         message: __("Vendor payment form link has been sent successfully"),
+    //                                         indicator: "green"
+    //                                     });
+    //                                 }
+    //                             }
+    //                         });
+    //                     }
+    //                 );
+    //             },
+    //         );
+    //     }
+    
+    // },
+
     refresh: function(frm) {
-        // Always show button on draft — allows adding more pickup requests
-        if (frm.doc.docstatus === 0) {
-            frm.add_custom_button(__('Get Pickup Request'), function() {
-                show_pickup_request_dialog(frm);
-            }).addClass('btn-primary');
-        }
+    // Always show button on draft — allows adding more pickup requests
+    if (frm.doc.docstatus === 0) {
+        frm.add_custom_button(__('Get Pickup Request'), function() {
+            show_pickup_request_dialog(frm);
+        }).addClass('btn-primary');
+    }
 
-        if (
-            frm.doc.workflow_state == "Create Bill Of Entry" &&
-            frm.doc.docstatus == 0 &&
-            frm.doc.bill_of_entry_created !== 1
-        ) {
-            frm.add_custom_button(__('Bill Of Entry'), () => {
-                frappe.call({
-                    method: "import.import.doctype.boe.boe.create_boe",
-                    args: { payment_requisition: frm.doc.name },
-                    callback: function(r) {
-                        if (!r.exc) {
-                            frappe.set_route('Form', 'BOE', r.message);
-                        }
-                    }
-                });
-            }, __('Create'));
-        }
-
-        if (frm.doc.duty_amount) {
+    if (
+        frm.doc.workflow_state == "Create Bill Of Entry" &&
+        frm.doc.docstatus == 0 &&
+        frm.doc.bill_of_entry_created !== 1
+    ) {
+        frm.add_custom_button(__('Bill Of Entry'), () => {
             frappe.call({
-                method: "import.import.doctype.payment_requisition.payment_requisition.get_amount_in_words",
-                args: { amount: frm.doc.duty_amount },
+                method: "import.import.doctype.boe.boe.create_boe",
+                args: { payment_requisition: frm.doc.name },
                 callback: function(r) {
-                    if (r.message) {
-                        frm.set_value("duty_amount_in_word", r.message);
+                    if (!r.exc) {
+                        frappe.set_route('Form', 'BOE', r.message);
                     }
                 }
             });
-        } else {
-            frm.set_value("duty_amount_in_word", "");
-        }
+        }, __('Create'));
+    }
 
-        if (!frm.is_new()) {
-            frm.add_custom_button(
-                __("Send Payment Form to Vendor"),
-                function () {
-                    const supplierId = (frm.doc.supplier_name && frm.doc.supplier_name.length)
-                        ? frm.doc.supplier_name[0].supplier
-                        : null;
+    if (frm.doc.duty_amount) {
+        frappe.call({
+            method: "import.import.doctype.payment_requisition.payment_requisition.get_amount_in_words",
+            args: { amount: frm.doc.duty_amount },
+            callback: function(r) {
+                if (r.message) {
+                    frm.set_value("duty_amount_in_word", r.message);
+                }
+            }
+        });
+    } else {
+        frm.set_value("duty_amount_in_word", "");
+    }
 
-                    frappe.confirm(
-                        `Send Vendor Payment Form link to <b>${supplierId || "supplier"}</b>?`,
-                        function () {
-                            frappe.call({
-                                method: "import.import.doctype.payment_requisition.payment_requisition.send_payment_requisition_vendor_mail",
-                                args: {
-                                    payment_requisition_name: frm.doc.name
-                                },
-                                freeze: true,
-                                freeze_message: __("Sending email to vendor..."),
-                                callback: function (r) {
-                                    if (!r.exc) {
-                                        frappe.msgprint({
-                                            title: __("Email Sent"),
-                                            message: __("Vendor payment form link has been sent successfully"),
-                                            indicator: "green"
-                                        });
-                                    }
-                                }
-                            });
+    if (!frm.is_new()) {
+        frm.add_custom_button(__("Send Payment Form"), function () {
+            if (frm.is_dirty()) {
+                frappe.msgprint(__("Please save the document first, then send the Payment Form."));
+                return;
+            }
+
+            const cha = frm.doc.cha || "";
+            const forwarder = frm.doc.forwarder || "";
+
+            if (!cha && !forwarder) {
+                frappe.msgprint(__("Please set CHA or Forwarder on this Payment Requisition first."));
+                return;
+            }
+
+            const render_preview = function(d) {
+                const choice = d.get_value("send_to");
+                const rows = [];
+                if (choice === "CHA" || choice === "Both") {
+                    rows.push(`<b>CHA:</b> ${frappe.utils.escape_html(cha) || '<span class="text-danger">Not set</span>'}`);
+                }
+                if (choice === "Forwarder" || choice === "Both") {
+                    rows.push(`<b>Forwarder:</b> ${frappe.utils.escape_html(forwarder) || '<span class="text-danger">Not set</span>'}`);
+                }
+                d.get_field("preview").$wrapper.html(
+                    `<div class="text-muted" style="margin-bottom: 10px;">${rows.join("<br>")}</div>`
+                );
+            };
+
+            const d = new frappe.ui.Dialog({
+                title: __("Send Payment Form"),
+                fields: [
+                    {
+                        fieldname: "send_to",
+                        fieldtype: "Select",
+                        label: __("Send To"),
+                        options: ["CHA", "Forwarder", "Both"].join("\n"),
+                        default: "Both",
+                        reqd: 1,
+                        onchange: function() {
+                            render_preview(d);
                         }
-                    );
-                },
-            );
-        }
-    
-    },
+                    },
+                    { fieldname: "preview", fieldtype: "HTML" }
+                ],
+                primary_action_label: __("Send"),
+                primary_action: function(values) {
+                    if (values.send_to === "CHA" && !cha) {
+                        frappe.msgprint(__("CHA is not set on this Payment Requisition."));
+                        return;
+                    }
+                    if (values.send_to === "Forwarder" && !forwarder) {
+                        frappe.msgprint(__("Forwarder is not set on this Payment Requisition."));
+                        return;
+                    }
 
+                    d.hide();
+
+                    frappe.call({
+                        method: "import.import.doctype.payment_requisition.payment_requisition.send_payment_requisition_vendor_mail",
+                        args: {
+                            payment_requisition_name: frm.doc.name,
+                            send_to: values.send_to
+                        },
+                        freeze: true,
+                        freeze_message: __("Sending email..."),
+                        callback: function(r) {
+                            if (!r.exc) {
+                                frappe.msgprint({
+                                    title: __("Email Sent"),
+                                    message: r.message || __("Vendor payment form link has been sent successfully"),
+                                    indicator: "green"
+                                });
+                            }
+                        }
+                    });
+                }
+            });
+
+            d.show();
+            render_preview(d);
+        });
+    }
+},
     duty_amount: function(frm) {
         if (frm.doc.duty_amount) {
             frappe.call({

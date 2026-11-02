@@ -26,70 +26,169 @@ def get_supplier_email(supplier):
 	return None
 
 
+# @frappe.whitelist()
+# def send_payment_requisition_vendor_mail(payment_requisition_name=None):
+# 	payment_requisition_name = payment_requisition_name or frappe.form_dict.get("payment_requisition_name")
+
+# 	if not payment_requisition_name:
+# 		frappe.throw(_("Payment Requisition name is required"))
+
+# 	doc = frappe.get_doc("Payment Requisition", payment_requisition_name)
+
+# 	if not doc.supplier_name:
+# 		frappe.throw(_("Supplier is not set on this Payment Requisition"))
+
+# 	supplier_id = doc.supplier_name[0].supplier
+
+# 	if not supplier_id:
+# 		frappe.throw(_("Supplier is not set on this Payment Requisition"))
+
+# 	supplier = frappe.get_doc("Supplier", supplier_id)
+
+# 	email_id = get_supplier_email(supplier)
+
+# 	if not email_id:
+# 		frappe.throw(_("No email found for supplier {0}. Please set an email on the Supplier, its primary Contact, or its primary Address.").format(supplier.supplier_name))
+
+# 	vendor_form_link = frappe.utils.get_url() + "/vendor-payment-forms?supplier=" + str(supplier_id)
+
+# 	message_body = """
+# 		Dear <b>{supplier_name}</b>,<br><br>
+
+# 		Greetings!<br><br>
+
+# 		Please fill out the Vendor Payment Form using the link below so we can process your payment request. Your supplier details will already be filled in.<br><br>
+
+# 		<a href="{link}">
+# 			Fill Vendor Payment Form
+# 		</a><br><br>
+
+# 		Regards,<br>
+# 		Accounts Team
+# 	""".format(
+# 		supplier_name=frappe.utils.escape_html(supplier.supplier_name or ""),
+# 		link=vendor_form_link,
+# 	)
+
+# 	frappe.sendmail(
+# 		recipients=[email_id],
+# 		subject="Vendor Payment Form - Please Fill",
+# 		message=message_body,
+# 	)
+
+# 	frappe.response["message"] = f"Mail sent successfully to {email_id}"
+
+
 @frappe.whitelist()
-def send_payment_requisition_vendor_mail(payment_requisition_name=None):
+def send_payment_requisition_vendor_mail(payment_requisition_name=None, send_to="Both"):
+	from urllib.parse import urlencode
+
 	payment_requisition_name = payment_requisition_name or frappe.form_dict.get("payment_requisition_name")
+	send_to = send_to or frappe.form_dict.get("send_to") or "Both"
 
 	if not payment_requisition_name:
 		frappe.throw(_("Payment Requisition name is required"))
 
+	if send_to not in ("CHA", "Forwarder", "Both"):
+		frappe.throw(_("Send To must be CHA, Forwarder or Both"))
+
 	doc = frappe.get_doc("Payment Requisition", payment_requisition_name)
 
-	if not doc.supplier_name:
-		frappe.throw(_("Supplier is not set on this Payment Requisition"))
+	# Build the list of (vendor_type, supplier_id) to send to
+	targets = []
+	if send_to in ("CHA", "Both"):
+		if doc.cha:
+			targets.append(("CHA", doc.cha))
+		elif send_to == "CHA":
+			frappe.throw(_("CHA is not set on this Payment Requisition"))
 
-	supplier_id = doc.supplier_name[0].supplier
+	if send_to in ("Forwarder", "Both"):
+		if doc.forwarder:
+			targets.append(("Forwarder", doc.forwarder))
+		elif send_to == "Forwarder":
+			frappe.throw(_("Forwarder is not set on this Payment Requisition"))
 
-	if not supplier_id:
-		frappe.throw(_("Supplier is not set on this Payment Requisition"))
+	if not targets:
+		frappe.throw(_("Neither CHA nor Forwarder is set on this Payment Requisition"))
 
-	supplier = frappe.get_doc("Supplier", supplier_id)
+	sent = []
+	skipped = []
 
-	email_id = get_supplier_email(supplier)
+	for vendor_type, supplier_id in targets:
+		supplier = frappe.get_doc("Supplier", supplier_id)
+		email_id = get_supplier_email(supplier)
 
-	if not email_id:
-		frappe.throw(_("No email found for supplier {0}. Please set an email on the Supplier, its primary Contact, or its primary Address.").format(supplier.supplier_name))
+		if not email_id:
+			skipped.append("{0} ({1})".format(supplier.supplier_name or supplier_id, vendor_type))
+			continue
 
-	vendor_form_link = frappe.utils.get_url() + "/vendor-payment-forms?supplier=" + str(supplier_id)
+		vendor_form_link = "{0}/vendor-payment-forms?{1}".format(
+			frappe.utils.get_url(),
+			urlencode({"supplier": supplier_id, "vendor_type": vendor_type}),
+		)
 
-	message_body = """
-		Dear <b>{supplier_name}</b>,<br><br>
+		message_body = """
+			Dear <b>{supplier_name}</b>,<br><br>
 
-		Greetings!<br><br>
+			Greetings!<br><br>
 
-		Please fill out the Vendor Payment Form using the link below so we can process your payment request. Your supplier details will already be filled in.<br><br>
+			Please fill out the Vendor Payment Form ({vendor_type}) using the link below so we can process your payment request. Your supplier details will already be filled in.<br><br>
 
-		<a href="{link}">
-			Fill Vendor Payment Form
-		</a><br><br>
+			<a href="{link}">
+				Fill Vendor Payment Form
+			</a><br><br>
 
-		Regards,<br>
-		Accounts Team
-	""".format(
-		supplier_name=frappe.utils.escape_html(supplier.supplier_name or ""),
-		link=vendor_form_link,
-	)
+			Regards,<br>
+			Accounts Team
+		""".format(
+			supplier_name=frappe.utils.escape_html(supplier.supplier_name or ""),
+			vendor_type=vendor_type,
+			link=vendor_form_link,
+		)
 
-	frappe.sendmail(
-		recipients=[email_id],
-		subject="Vendor Payment Form - Please Fill",
-		message=message_body,
-	)
+		frappe.sendmail(
+			recipients=[email_id],
+			subject="Vendor Payment Form - Please Fill",
+			message=message_body,
+			reference_doctype=doc.doctype,
+			reference_name=doc.name,
+		)
 
-	frappe.response["message"] = f"Mail sent successfully to {email_id}"
+		sent.append("{0} ({1}) - {2}".format(supplier.supplier_name or supplier_id, vendor_type, email_id))
+
+	if not sent:
+		frappe.throw(
+			_("No email found for: {0}. Please set an email on the Supplier, its primary Contact, or its primary Address.").format(
+				", ".join(skipped)
+			)
+		)
+
+	message = _("Mail sent successfully to: {0}").format("<br>".join(sent))
+	if skipped:
+		message += "<br><br>" + _("Skipped (no email found): {0}").format(", ".join(skipped))
+
+	frappe.response["message"] = message
 
 
 @frappe.whitelist(allow_guest=True)
-def get_vendor_payment_form_data(supplier=None):
+def get_vendor_payment_form_data(supplier=None, vendor_type=None):
 	supplier = supplier or frappe.form_dict.get("supplier")
+	vendor_type = vendor_type or frappe.form_dict.get("vendor_type")
 
 	if not supplier:
 		frappe.throw(_("Supplier is required"))
 
+	filters = {"supplier": supplier}
+	if vendor_type in ("CHA", "Forwarder"):
+		filters["vendor_type"] = vendor_type
+
 	existing = frappe.get_all(
 		"Vendor Payment Form",
-		filters={"supplier": supplier},
-		fields=["name", "invoice_no", "invoice_value", "boe_no", "awb", "remark"],
+		filters=filters,
+		fields=[
+			"name", "vendor_type", "service_type", "invoice_no", "invoice_value",
+			"boe_no", "mawb_no", "hawb_no", "remark",
+		],
 		order_by="modified desc",
 		limit_page_length=1,
 	)
@@ -108,6 +207,36 @@ def get_vendor_payment_form_data(supplier=None):
 	data["attachments"] = [a["attachment"] for a in attachments if a.get("attachment")]
 
 	frappe.response["message"] = data
+
+# @frappe.whitelist(allow_guest=True)
+# def get_vendor_payment_form_data(supplier=None):
+# 	supplier = supplier or frappe.form_dict.get("supplier")
+
+# 	if not supplier:
+# 		frappe.throw(_("Supplier is required"))
+
+# 	existing = frappe.get_all(
+# 		"Vendor Payment Form",
+# 		filters={"supplier": supplier},
+# 		fields=["name", "invoice_no", "invoice_value", "boe_no", "awb", "remark"],
+# 		order_by="modified desc",
+# 		limit_page_length=1,
+# 	)
+
+# 	if not existing:
+# 		frappe.response["message"] = None
+# 		return
+
+# 	data = existing[0]
+
+# 	attachments = frappe.get_all(
+# 		"Vendor CT",
+# 		filters={"parent": data["name"], "parenttype": "Vendor Payment Form"},
+# 		fields=["attachment"],
+# 	)
+# 	data["attachments"] = [a["attachment"] for a in attachments if a.get("attachment")]
+
+# 	frappe.response["message"] = data
 
 
 

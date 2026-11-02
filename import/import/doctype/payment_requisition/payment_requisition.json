@@ -20,6 +20,7 @@
   "duty_amount",
   "rodtep_details",
   "journal_entry",
+  "forwarder",
   "column_break_fixf",
   "posting_date",
   "company",
@@ -413,6 +414,12 @@
    "fieldtype": "Link",
    "label": "BOE Details",
    "options": "BOE"
+  },
+  {
+   "fieldname": "forwarder",
+   "fieldtype": "Link",
+   "label": "Forwarder",
+   "options": "Supplier"
   }
  ],
  "grid_page_length": 50,
@@ -424,7 +431,7 @@
    "link_fieldname": "custom_payment_requisition"
   }
  ],
- "modified": "2026-06-18 15:05:46.384408",
+ "modified": "2026-11-02 15:17:26.418367",
  "modified_by": "Administrator",
  "module": "Import",
  "name": "Payment Requisition",

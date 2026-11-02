@@ -8,14 +8,16 @@
  "field_order": [
   "section_break_melg",
   "supplier",
+  "vendor_type",
+  "service_type",
   "invoice_no",
   "invoice_value",
   "remark",
   "column_break_zawq",
   "boe_no",
-  "awb",
+  "mawb_no",
+  "hawb_no",
   "attachment",
-  "amended_from",
   "amended_from"
  ],
  "fields": [
@@ -52,12 +54,8 @@
   {
    "fieldname": "boe_no",
    "fieldtype": "Data",
-   "label": "BOE no"
-  },
-  {
-   "fieldname": "awb",
-   "fieldtype": "Data",
-   "label": "AWB"
+   "label": "BOE No",
+   "mandatory_depends_on": "eval:doc.vendor_type===\"CHA\""
   },
   {
    "fieldname": "attachment",
@@ -84,13 +82,37 @@
    "print_hide": 1,
    "read_only": 1,
    "search_index": 1
+  },
+  {
+   "fieldname": "vendor_type",
+   "fieldtype": "Select",
+   "label": "Vendor Type",
+   "options": "\nCHA\nForwarder"
+  },
+  {
+   "fieldname": "mawb_no",
+   "fieldtype": "Data",
+   "label": "MAWB No",
+   "mandatory_depends_on": "eval:doc.vendor_type===\"Forwarder\" && !doc.hawb_no"
+  },
+  {
+   "fieldname": "hawb_no",
+   "fieldtype": "Data",
+   "label": "HAWB No",
+   "mandatory_depends_on": "eval:doc.vendor_type===\"Forwarder\" && !doc.mawb_no"
+  },
+  {
+   "fieldname": "service_type",
+   "fieldtype": "Select",
+   "label": "Service Type",
+   "options": "\nForwarding\nClearance\nTransportation\nForwarding + Clearance\nClearance + Transportation\nDoor to Door\nDoor to Port"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-09-23 15:21:09.787486",
+ "modified": "2026-11-02 15:38:58.660441",
  "modified_by": "Administrator",
  "module": "Import",
  "name": "Vendor Payment Form",
