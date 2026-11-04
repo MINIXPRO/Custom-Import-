@@ -246,3 +246,32 @@ def set_quotation_number(doc, method):
                     })
 
 
+
+
+@frappe.whitelist(allow_guest=True)
+def get_pickup_shipping_document(pickup_request, rfq):
+    if not pickup_request or not rfq:
+        return None
+
+    rfq_pickup = frappe.db.get_value("Request for Quotation", rfq, "custom_pickup_request")
+    if not rfq_pickup or rfq_pickup != pickup_request:
+        return None
+
+    return frappe.db.get_value("Pickup Request", pickup_request, "shipping_document")
+
+
+
+@frappe.whitelist(allow_guest=True)
+def download_shipping_document(pickup_request, rfq):
+    rfq_pickup = frappe.db.get_value("Request for Quotation", rfq, "custom_pickup_request")
+    if not rfq_pickup or rfq_pickup != pickup_request:
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+    file_url = frappe.db.get_value("Pickup Request", pickup_request, "shipping_document")
+    if not file_url:
+        frappe.throw(_("No shipping document found"), frappe.DoesNotExistError)
+
+    file_doc = frappe.get_doc("File", {"file_url": file_url})
+    frappe.local.response.filename = file_doc.file_name
+    frappe.local.response.filecontent = file_doc.get_content()
+    frappe.local.response.type = "download"

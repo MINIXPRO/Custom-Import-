@@ -906,3 +906,4 @@ def make_purchase_receipt_from_pickup(pickup_request):
         created_prs.append({"name": pr.name, "supplier": pr.supplier})
 
     return created_prs
+
